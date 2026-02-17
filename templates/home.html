@@ -4,9 +4,44 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Video Editing Agent</title>
+    <style>
+      body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      form { border: 1px solid #ddd; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
+      input, select { width: 100%; padding: 0.5rem; margin: 0.25rem 0 0.75rem; }
+      button { padding: 0.5rem 0.75rem; }
+      .muted { color: #666; }
+    </style>
   </head>
   <body>
     <h1>Video Editing Agent</h1>
-    <p>Use the API at <code>/api/v1/</code> and docs at <code>/api/docs/</code>.</p>
+    <p class="muted">Create a project, then upload and generate draft ads.</p>
+
+    <form method="post">
+      {% csrf_token %}
+      <h3>New Project</h3>
+      <label>Name</label>
+      <input type="text" name="name" required />
+      <label>Prompt</label>
+      <input type="text" name="prompt" placeholder="Create a high-converting gameplay ad" />
+      <label>Template</label>
+      <select name="template_id">
+        <option value="hook_benefit_cta_v1">Hook-Benefit-CTA</option>
+        <option value="problem_solution_cta_v1">Problem-Solution-CTA</option>
+      </select>
+      <label>Primary Color</label>
+      <input type="text" name="primary_color" value="#00A86B" />
+      <button type="submit">Create Project</button>
+    </form>
+
+    <h3>Recent Projects</h3>
+    <ul>
+      {% for p in projects %}
+      <li><a href="/app/projects/{{ p.id }}">{{ p.name }}</a> ({{ p.status }})</li>
+      {% empty %}
+      <li>No projects yet.</li>
+      {% endfor %}
+    </ul>
+
+    <p>API docs: <a href="/api/docs/">/api/docs/</a></p>
   </body>
 </html>

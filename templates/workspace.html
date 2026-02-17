@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workspace</title>
+    <style>
+      body { font-family: sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+      button { padding: 0.5rem 0.75rem; }
+      ul { margin: 0.5rem 0 0; }
+      video { width: 100%; max-height: 500px; background: #000; }
+      .muted { color: #666; }
+    </style>
+  </head>
+  <body>
+    <p><a href="/app">Back</a></p>
+    <h1>{{ project.name }}</h1>
+    <p class="muted">Status: <strong>{{ project.status }}</strong> | Template: {{ project.template_id }}</p>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h3>Upload Source Video</h3>
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="upload_source" />
+            <input type="file" name="source_video" accept="video/mp4" required />
+            <button type="submit">Upload</button>
+          </form>
+          <p class="muted">Max duration: {{ max_duration }}s</p>
+        </div>
+
+        <div class="card">
+          <h3>Upload Logo (optional)</h3>
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="upload_logo" />
+            <input type="file" name="logo" accept="image/*" required />
+            <button type="submit">Upload Logo</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h3>Generate and Export</h3>
+          <form method="post" style="margin-bottom: 0.5rem;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="generate_draft" />
+            <button type="submit">Generate Draft</button>
+          </form>
+          <form method="post" style="margin-bottom: 0.5rem;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="approve_draft" />
+            <input type="hidden" name="approved" value="1" />
+            <button type="submit">Approve Draft</button>
+          </form>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="export_final" />
+            <button type="submit">Export Final</button>
+          </form>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>Draft Preview</h3>
+          {% if draft and draft.draft_video %}
+            <video controls src="{{ draft.draft_video.url }}"></video>
+            <p>Approved: {{ draft.approved }}</p>
+          {% else %}
+            <p>No draft video yet.</p>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <h3>Jobs</h3>
+          <ul>
+            {% for j in jobs %}
+            <li>{{ j.job_type }} - {{ j.status }}{% if j.error %} ({{ j.error }}){% endif %}</li>
+            {% empty %}
+            <li>No jobs yet.</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>Exports</h3>
+          <ul>
+            {% for e in exports %}
+            <li><a href="{{ e.file.url }}">{{ e.file.name }}</a></li>
+            {% empty %}
+            <li>No exports yet.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Assets</h3>
+      <ul>
+        {% for a in assets %}
+        <li>{{ a.asset_type }} - {{ a.file.name }}</li>
+        {% empty %}
+        <li>No assets uploaded.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </body>
+</html>

@@ -18,6 +18,7 @@ make migrate
 ```bash
 make run
 ```
+Then open `http://127.0.0.1:8000/app`.
 
 ## Gemini provider (phase 1)
 In `.env`:
