@@ -9,7 +9,7 @@ from pathlib import Path
 from django.conf import settings
 
 from pipeline.ai import CreativeBriefInput, get_provider
-from projects.models import Asset, Draft, Overlay, Project
+from projects.models import Asset, Draft, DraftVersion, Overlay, Project
 
 
 class PipelineError(Exception):
@@ -221,6 +221,50 @@ def _text_x_expr(position: dict) -> str:
     return f"(w-text_w)*{x}"
 
 
+def _overlay_key(item: dict, idx: int) -> str:
+    key = str(item.get("id", "")).strip()
+    if key:
+        return key
+    return f"idx_{idx}"
+
+
+def compute_overlay_diff(previous: list[dict], current: list[dict]) -> dict:
+    prev_map = {_overlay_key(item, i): item for i, item in enumerate(previous)}
+    curr_map = {_overlay_key(item, i): item for i, item in enumerate(current)}
+
+    added = []
+    removed = []
+    updated = []
+
+    for key, item in curr_map.items():
+        if key not in prev_map:
+            added.append({"id": key, "overlay": item})
+        elif prev_map[key] != item:
+            updated.append({"id": key, "before": prev_map[key], "after": item})
+
+    for key, item in prev_map.items():
+        if key not in curr_map:
+            removed.append({"id": key, "overlay": item})
+
+    return {"added": added, "removed": removed, "updated": updated}
+
+
+def persist_draft_version(draft: Draft, timeline: dict, source: str) -> DraftVersion:
+    latest = draft.versions.first()
+    previous_overlays = latest.timeline_json.get("overlays", []) if latest else []
+    current_overlays = timeline.get("overlays", [])
+    next_version = (latest.version + 1) if latest else 1
+    diff = compute_overlay_diff(previous_overlays, current_overlays)
+    return DraftVersion.objects.create(
+        draft=draft,
+        version=next_version,
+        source=source,
+        timeline_json=timeline,
+        overlay_diff_json=diff,
+        draft_video_name=draft.draft_video.name if draft.draft_video else "",
+    )
+
+
 def render_with_overlays(src: Path, dst: Path, timeline: dict, project: Project) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     overlays = timeline.get("overlays", [])
@@ -349,7 +393,7 @@ def rebuild_overlays(draft: Draft, timeline_json: dict) -> None:
     Overlay.objects.bulk_create(rows)
 
 
-def rerender_draft(project: Project, draft: Draft, timeline: dict) -> None:
+def rerender_draft(project: Project, draft: Draft, timeline: dict, source: str = "manual_patch") -> None:
     source_asset = source_video_asset(project)
     src_path = Path(source_asset.file.path)
     normalized = Path(settings.MEDIA_ROOT) / "normalized" / f"{project.id}.mp4"
@@ -366,3 +410,4 @@ def rerender_draft(project: Project, draft: Draft, timeline: dict) -> None:
     draft.error = ""
     draft.save(update_fields=["timeline_json", "draft_video", "status", "error", "updated_at"])
     rebuild_overlays(draft, timeline)
+    persist_draft_version(draft, timeline, source=source)

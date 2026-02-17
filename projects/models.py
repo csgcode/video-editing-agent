@@ -63,6 +63,20 @@ class Draft(TimestampedModel):
     error = models.TextField(blank=True)
 
 
+class DraftVersion(TimestampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    draft = models.ForeignKey(Draft, on_delete=models.CASCADE, related_name="versions")
+    version = models.PositiveIntegerField()
+    source = models.CharField(max_length=32, default="unknown")
+    timeline_json = models.JSONField(default=dict, blank=True)
+    overlay_diff_json = models.JSONField(default=dict, blank=True)
+    draft_video_name = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["draft", "version"], name="unique_draft_version")]
+        ordering = ["-version"]
+
+
 class Overlay(TimestampedModel):
     class OverlayType(models.TextChoices):
         HEADLINE = "headline", "Headline"

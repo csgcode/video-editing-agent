@@ -128,7 +128,7 @@ class DraftDetailView(APIView):
                 "copy_variants": timeline.get("copy_variants", {}),
             })
             draft.timeline_json = timeline
-            rerender_draft(project, draft, timeline)
+            rerender_draft(project, draft, timeline, source="api_overlay_edit")
 
         draft.save()
         return Response(DraftSerializer(draft).data)

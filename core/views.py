@@ -117,7 +117,7 @@ class WorkspaceView(View):
                         "copy_variants": timeline.get("copy_variants", {}),
                     }
                 )
-                rerender_draft(project, draft, timeline)
+                rerender_draft(project, draft, timeline, source="manual_json_edit")
             except (ValueError, json.JSONDecodeError, PipelineError) as exc:
                 error_qs = urlencode({"error": str(exc)})
                 return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")
@@ -143,7 +143,7 @@ class WorkspaceView(View):
                         "copy_variants": timeline.get("copy_variants", {}),
                     }
                 )
-                rerender_draft(project, draft, timeline)
+                rerender_draft(project, draft, timeline, source="prompt_patch")
             except (ValueError, json.JSONDecodeError, PipelineError, RuntimeError) as exc:
                 error_qs = urlencode({"error": str(exc)})
                 return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")

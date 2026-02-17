@@ -13,6 +13,7 @@ from pipeline.services import (
     ffprobe_metadata,
     generate_copy,
     normalize_video,
+    persist_draft_version,
     rebuild_overlays,
     render_with_overlays,
     source_video_asset,
@@ -55,6 +56,7 @@ def generate_draft_task(self, job_id: str) -> dict:
         draft.status = Draft.Status.READY
         draft.save(update_fields=["draft_video", "status", "updated_at"])
         rebuild_overlays(draft, timeline)
+        persist_draft_version(draft, timeline, source="initial_generate")
 
         project.status = Project.Status.DRAFT_READY
         project.save(update_fields=["status", "updated_at"])
