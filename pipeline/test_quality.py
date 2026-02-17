@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from pipeline.services import build_safe_fallback_timeline
 from pipeline.quality import validate_plan_quality
+from projects.models import Project
 
 
 def test_quality_gate_passes_valid_overlays():
@@ -64,3 +66,16 @@ def test_quality_gate_warns_small_font_size():
     report = validate_plan_quality(overlays, duration_sec=2.0)
     assert report["critical"] == []
     assert any("font_size is low" in msg for msg in report["warnings"])
+
+
+def test_safe_fallback_timeline_has_required_overlays(db):
+    project = Project.objects.create(name="safe", primary_color="#00A86B")
+    timeline = build_safe_fallback_timeline(
+        project,
+        duration_sec=10.0,
+        copy={"headline": "H", "benefit": "B", "cta": "C"},
+    )
+    kinds = {row["type"] for row in timeline["overlays"]}
+    assert timeline["template_id"] == "safe_fallback_v1"
+    assert "headline" in kinds
+    assert "cta" in kinds

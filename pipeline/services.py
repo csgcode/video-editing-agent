@@ -160,6 +160,29 @@ def _template_problem_solution_cta(project: Project, duration_sec: float, copy: 
     return overlays
 
 
+def build_safe_fallback_timeline(project: Project, duration_sec: float, copy: dict) -> dict:
+    overlays = _template_hook_benefit_cta(project, duration_sec, copy)
+    return {
+        "project_id": str(project.id),
+        "template_id": "safe_fallback_v1",
+        "video": {
+            "duration_sec": duration_sec,
+            "width": settings.TARGET_WIDTH,
+            "height": settings.TARGET_HEIGHT,
+            "fps": settings.TARGET_FPS,
+        },
+        "copy_variants": {
+            "headline": [copy.get("headline", "")],
+            "cta": [copy.get("cta", "")],
+        },
+        "overlays": overlays,
+        "generation": {
+            "model_provider": "fallback_safe",
+            "created_at": datetime.now(tz=UTC).isoformat(),
+        },
+    }
+
+
 def build_timeline(project: Project, duration_sec: float, copy: dict) -> dict:
     if project.template_id == "problem_solution_cta_v1":
         overlays = _template_problem_solution_cta(project, duration_sec, copy)
@@ -404,22 +427,59 @@ def rerender_draft(project: Project, draft: Draft, timeline: dict, source: str =
     metadata = ffprobe_metadata(normalized)
     video_context = getattr(project, "video_context", None)
     context_json = video_context.context_json if video_context else {}
-    plan_json = build_edit_plan(project, context_json, {}, timeline, source=source)
+    plan_source = source
+    plan_json = build_edit_plan(project, context_json, {}, timeline, source=plan_source)
     quality_report = validate_plan_quality(plan_json.get("overlays", []), metadata.get("duration_sec", 0.0))
     if quality_report["critical"]:
-        persist_edit_plan(
-            project=project,
-            draft=draft,
-            plan_json=plan_json,
-            quality_report_json=quality_report,
-            source=source,
-            status="failed",
-            error="; ".join(quality_report["critical"]),
-        )
-        raise PipelineError(f"Quality gate failed: {'; '.join(quality_report['critical'])}")
+        if settings.AUTO_FALLBACK_TEMPLATE_ON_RENDER_FAIL:
+            copy = {
+                "headline": str((timeline.get("copy_variants", {}).get("headline") or ["Level up"])[0]),
+                "benefit": "Win faster with smarter controls",
+                "cta": str((timeline.get("copy_variants", {}).get("cta") or ["Play Free"])[0]),
+            }
+            timeline = build_safe_fallback_timeline(project, metadata.get("duration_sec", 0.0), copy)
+            plan_source = f"{source}_fallback"
+            plan_json = build_edit_plan(project, context_json, copy, timeline, source=plan_source)
+            quality_report = validate_plan_quality(plan_json.get("overlays", []), metadata.get("duration_sec", 0.0))
+        else:
+            persist_edit_plan(
+                project=project,
+                draft=draft,
+                plan_json=plan_json,
+                quality_report_json=quality_report,
+                source=source,
+                status="failed",
+                error="; ".join(quality_report["critical"]),
+            )
+            raise PipelineError(f"Quality gate failed: {'; '.join(quality_report['critical'])}")
 
     draft_path = Path(settings.MEDIA_ROOT) / "drafts" / f"{project.id}-{uuid.uuid4().hex[:6]}.mp4"
-    render_with_overlays(normalized, draft_path, timeline, project)
+    try:
+        render_with_overlays(normalized, draft_path, timeline, project)
+    except PipelineError as exc:
+        if not settings.AUTO_FALLBACK_TEMPLATE_ON_RENDER_FAIL:
+            raise
+        copy = {
+            "headline": str((timeline.get("copy_variants", {}).get("headline") or ["Level up"])[0]),
+            "benefit": "Win faster with smarter controls",
+            "cta": str((timeline.get("copy_variants", {}).get("cta") or ["Play Free"])[0]),
+        }
+        timeline = build_safe_fallback_timeline(project, metadata.get("duration_sec", 0.0), copy)
+        plan_source = f"{source}_fallback"
+        plan_json = build_edit_plan(project, context_json, copy, timeline, source=plan_source)
+        quality_report = validate_plan_quality(plan_json.get("overlays", []), metadata.get("duration_sec", 0.0))
+        if quality_report["critical"]:
+            persist_edit_plan(
+                project=project,
+                draft=draft,
+                plan_json=plan_json,
+                quality_report_json=quality_report,
+                source=plan_source,
+                status="failed",
+                error=f"Fallback failed: {'; '.join(quality_report['critical'])}",
+            )
+            raise PipelineError(f"Render failed and fallback plan invalid: {exc}") from exc
+        render_with_overlays(normalized, draft_path, timeline, project)
     rel = draft_path.relative_to(Path(settings.MEDIA_ROOT))
 
     draft.timeline_json = timeline
@@ -428,5 +488,5 @@ def rerender_draft(project: Project, draft: Draft, timeline: dict, source: str =
     draft.error = ""
     draft.save(update_fields=["timeline_json", "draft_video", "status", "error", "updated_at"])
     rebuild_overlays(draft, timeline)
-    persist_edit_plan(project, draft, plan_json, quality_report, source=source)
+    persist_edit_plan(project, draft, plan_json, quality_report, source=plan_source)
     persist_draft_version(draft, timeline, source=source)

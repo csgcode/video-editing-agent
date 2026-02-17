@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from pipeline.services import (
     PipelineError,
+    build_safe_fallback_timeline,
     build_timeline,
     ffprobe_metadata,
     generate_copy,
@@ -45,21 +46,28 @@ def generate_draft_task(self, job_id: str) -> dict:
         timeline = build_timeline(project, metadata["duration_sec"], copy)
         video_context = getattr(project, "video_context", None)
         context_json = video_context.context_json if video_context else {}
-        plan_json = build_edit_plan(project, context_json, copy, timeline, source="initial_generate")
+        plan_source = "initial_generate"
+        plan_json = build_edit_plan(project, context_json, copy, timeline, source=plan_source)
         quality_report = validate_plan_quality(plan_json.get("overlays", []), metadata["duration_sec"])
 
         draft, _ = Draft.objects.get_or_create(project=project)
         if quality_report["critical"]:
-            persist_edit_plan(
-                project=project,
-                draft=draft,
-                plan_json=plan_json,
-                quality_report_json=quality_report,
-                source="initial_generate",
-                status="failed",
-                error="; ".join(quality_report["critical"]),
-            )
-            raise PipelineError(f"Quality gate failed: {'; '.join(quality_report['critical'])}")
+            if settings.AUTO_FALLBACK_TEMPLATE_ON_RENDER_FAIL:
+                timeline = build_safe_fallback_timeline(project, metadata["duration_sec"], copy)
+                plan_source = "initial_generate_fallback"
+                plan_json = build_edit_plan(project, context_json, copy, timeline, source=plan_source)
+                quality_report = validate_plan_quality(plan_json.get("overlays", []), metadata["duration_sec"])
+            else:
+                persist_edit_plan(
+                    project=project,
+                    draft=draft,
+                    plan_json=plan_json,
+                    quality_report_json=quality_report,
+                    source="initial_generate",
+                    status="failed",
+                    error="; ".join(quality_report["critical"]),
+                )
+                raise PipelineError(f"Quality gate failed: {'; '.join(quality_report['critical'])}")
 
         draft.timeline_json = timeline
         draft.status = Draft.Status.PENDING
@@ -67,14 +75,34 @@ def generate_draft_task(self, job_id: str) -> dict:
         draft.save(update_fields=["timeline_json", "status", "error", "updated_at"])
 
         draft_path = Path(settings.MEDIA_ROOT) / "drafts" / f"{project.id}-{uuid.uuid4().hex[:6]}.mp4"
-        render_with_overlays(normalized, draft_path, timeline, project)
+        try:
+            render_with_overlays(normalized, draft_path, timeline, project)
+        except PipelineError as exc:
+            if not settings.AUTO_FALLBACK_TEMPLATE_ON_RENDER_FAIL:
+                raise
+            timeline = build_safe_fallback_timeline(project, metadata["duration_sec"], copy)
+            plan_source = "initial_generate_fallback"
+            plan_json = build_edit_plan(project, context_json, copy, timeline, source=plan_source)
+            quality_report = validate_plan_quality(plan_json.get("overlays", []), metadata["duration_sec"])
+            if quality_report["critical"]:
+                persist_edit_plan(
+                    project=project,
+                    draft=draft,
+                    plan_json=plan_json,
+                    quality_report_json=quality_report,
+                    source="initial_generate_fallback",
+                    status="failed",
+                    error=f"Fallback failed: {'; '.join(quality_report['critical'])}",
+                )
+                raise PipelineError(f"Render failed and fallback plan invalid: {exc}") from exc
+            render_with_overlays(normalized, draft_path, timeline, project)
 
         rel = draft_path.relative_to(Path(settings.MEDIA_ROOT))
         draft.draft_video.name = str(rel)
         draft.status = Draft.Status.READY
         draft.save(update_fields=["draft_video", "status", "updated_at"])
         rebuild_overlays(draft, timeline)
-        persist_edit_plan(project, draft, plan_json, quality_report, source="initial_generate")
+        persist_edit_plan(project, draft, plan_json, quality_report, source=plan_source)
         persist_draft_version(draft, timeline, source="initial_generate")
 
         project.status = Project.Status.DRAFT_READY

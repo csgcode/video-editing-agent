@@ -29,8 +29,10 @@ AI_PROVIDER=gemini
 GEMINI_API_KEY=<your_api_key>
 GEMINI_MODEL=gemini-2.0-flash
 GEMINI_TIMEOUT_SECONDS=20
+AUTO_FALLBACK_TEMPLATE_ON_RENDER_FAIL=1
 ```
 If `AI_PROVIDER=gemini` and key is missing/fails, the app falls back to local copy generation.
+If `AUTO_FALLBACK_TEMPLATE_ON_RENDER_FAIL=1`, failed render plans auto-fallback to a safe template.
 
 ## Run (async with Redis + Celery)
 Terminal 1:
