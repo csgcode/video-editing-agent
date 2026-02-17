@@ -12,6 +12,7 @@ from django.views import View
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pipeline.ai import edit_overlays_with_prompt
 from pipeline.services import PipelineError, ffprobe_metadata, rerender_draft
 from pipeline.tasks import export_final_task, generate_draft_task
 from projects.models import Asset, Draft, ExportArtifact, Job, Project
@@ -118,6 +119,32 @@ class WorkspaceView(View):
                 )
                 rerender_draft(project, draft, timeline)
             except (ValueError, json.JSONDecodeError, PipelineError) as exc:
+                error_qs = urlencode({"error": str(exc)})
+                return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")
+
+        elif action == "prompt_edit_overlays":
+            draft = Draft.objects.filter(project=project).first()
+            if not draft:
+                error_qs = urlencode({"error": "No draft available. Generate one first."})
+                return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")
+            instruction = (request.POST.get("overlay_prompt") or "").strip()
+            if not instruction:
+                error_qs = urlencode({"error": "Overlay prompt cannot be empty."})
+                return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")
+            try:
+                timeline = draft.timeline_json or {}
+                current_overlays = timeline.get("overlays", [])
+                updated_overlays = edit_overlays_with_prompt(current_overlays, instruction)
+                timeline["overlays"] = updated_overlays
+                DraftTimeline.model_validate(
+                    {
+                        "template_id": timeline.get("template_id", project.template_id),
+                        "overlays": updated_overlays,
+                        "copy_variants": timeline.get("copy_variants", {}),
+                    }
+                )
+                rerender_draft(project, draft, timeline)
+            except (ValueError, json.JSONDecodeError, PipelineError, RuntimeError) as exc:
                 error_qs = urlencode({"error": str(exc)})
                 return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")
 

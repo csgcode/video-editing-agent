@@ -20,6 +20,7 @@ make run
 ```
 Then open `http://127.0.0.1:8000/app`.
 Create a project, upload source video/logo, generate draft, then edit overlays in the workspace and re-render.
+Use the **Apply Prompt** box in workspace to ask the agent to modify overlays (for example: bigger headline, new CTA text), then re-render.
 
 ## Gemini provider (phase 1)
 In `.env`:

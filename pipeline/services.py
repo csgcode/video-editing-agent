@@ -281,8 +281,8 @@ def render_with_overlays(src: Path, dst: Path, timeline: dict, project: Project)
             box_tag = f"v{tag_idx}"
             tag_idx += 1
             filters.append(
-                f"[{current}]drawbox=x=w*0.16:y=h*{float(pos.get('y', 0.9))}-h*0.055:"
-                f"w=w*0.68:h=h*0.11:color={cta_bg}@0.92:t=fill:enable='between(t,{start},{end})'[{box_tag}]"
+                f"[{current}]drawbox=x=iw*0.16:y=ih*{float(pos.get('y', 0.9))}-ih*0.055:"
+                f"w=iw*0.68:h=ih*0.11:color={cta_bg}@0.92:t=fill:enable='between(t,{start},{end})'[{box_tag}]"
             )
             current = box_tag
 

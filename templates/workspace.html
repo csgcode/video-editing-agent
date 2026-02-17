@@ -83,6 +83,12 @@
         <div class="card">
           <h3>Edit Draft Overlays</h3>
           <p class="muted">Edit overlay text, timing, position, style in JSON and re-render draft.</p>
+          <form method="post" style="margin-bottom: 0.75rem;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="prompt_edit_overlays" />
+            <input type="text" name="overlay_prompt" placeholder='e.g. Make headline bigger and set CTA to "Play Now"' style="width:100%;padding:0.5rem;" />
+            <button type="submit">Apply Prompt</button>
+          </form>
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="update_overlays" />
