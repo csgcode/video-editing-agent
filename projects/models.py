@@ -61,6 +61,26 @@ class VideoContext(TimestampedModel):
     error = models.TextField(blank=True)
 
 
+class EditPlanArtifact(TimestampedModel):
+    class Status(models.TextChoices):
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="edit_plans")
+    draft = models.ForeignKey("Draft", on_delete=models.CASCADE, related_name="edit_plans", null=True, blank=True)
+    version = models.PositiveIntegerField()
+    source = models.CharField(max_length=32, default="auto")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.READY)
+    plan_json = models.JSONField(default=dict, blank=True)
+    quality_report_json = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["project", "version"], name="unique_project_edit_plan_version")]
+        ordering = ["-version"]
+
+
 class Draft(TimestampedModel):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
