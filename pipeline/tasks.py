@@ -48,7 +48,7 @@ def generate_draft_task(self, job_id: str) -> dict:
         draft.save(update_fields=["timeline_json", "status", "error", "updated_at"])
 
         draft_path = Path(settings.MEDIA_ROOT) / "drafts" / f"{project.id}-{uuid.uuid4().hex[:6]}.mp4"
-        render_with_overlays(normalized, draft_path, timeline)
+        render_with_overlays(normalized, draft_path, timeline, project)
 
         rel = draft_path.relative_to(Path(settings.MEDIA_ROOT))
         draft.draft_video.name = str(rel)

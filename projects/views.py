@@ -9,7 +9,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from pipeline.services import ffprobe_metadata
+from pipeline.services import ffprobe_metadata, rerender_draft
 from pipeline.tasks import export_final_task, generate_draft_task
 from projects.models import Asset, Draft, ExportArtifact, Job, Overlay, Project
 from projects.schemas import DraftTimeline
@@ -128,6 +128,7 @@ class DraftDetailView(APIView):
                 "copy_variants": timeline.get("copy_variants", {}),
             })
             draft.timeline_json = timeline
+            rerender_draft(project, draft, timeline)
 
         draft.save()
         return Response(DraftSerializer(draft).data)

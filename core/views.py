@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.http import HttpResponseRedirect
@@ -10,9 +12,10 @@ from django.views import View
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from pipeline.services import ffprobe_metadata
+from pipeline.services import PipelineError, ffprobe_metadata, rerender_draft
 from pipeline.tasks import export_final_task, generate_draft_task
 from projects.models import Asset, Draft, ExportArtifact, Job, Project
+from projects.schemas import DraftTimeline
 
 
 class HomeView(View):
@@ -35,6 +38,9 @@ class WorkspaceView(View):
         draft = Draft.objects.filter(project=project).first()
         jobs = Job.objects.filter(project=project).order_by("-created_at")[:10]
         exports = ExportArtifact.objects.filter(project=project).order_by("-created_at")[:10]
+        overlay_json = "[]"
+        if draft and draft.timeline_json:
+            overlay_json = json.dumps(draft.timeline_json.get("overlays", []), indent=2)
         return render(
             request,
             "workspace.html",
@@ -45,6 +51,8 @@ class WorkspaceView(View):
                 "exports": exports,
                 "assets": project.assets.order_by("-created_at"),
                 "max_duration": settings.VIDEO_MAX_DURATION_SECONDS,
+                "overlay_json": overlay_json,
+                "error_message": request.GET.get("error", ""),
             },
         )
 
@@ -87,6 +95,31 @@ class WorkspaceView(View):
             if not job.task_id:
                 job.task_id = getattr(task, "id", "") or ""
                 job.save(update_fields=["task_id", "updated_at"])
+
+        elif action == "update_overlays":
+            draft = Draft.objects.filter(project=project).first()
+            if not draft:
+                error_qs = urlencode({"error": "No draft available. Generate one first."})
+                return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")
+
+            raw = (request.POST.get("overlays_json") or "").strip()
+            try:
+                overlays = json.loads(raw)
+                if not isinstance(overlays, list):
+                    raise ValueError("Overlay payload must be a JSON array.")
+                timeline = draft.timeline_json or {}
+                timeline["overlays"] = overlays
+                DraftTimeline.model_validate(
+                    {
+                        "template_id": timeline.get("template_id", project.template_id),
+                        "overlays": overlays,
+                        "copy_variants": timeline.get("copy_variants", {}),
+                    }
+                )
+                rerender_draft(project, draft, timeline)
+            except (ValueError, json.JSONDecodeError, PipelineError) as exc:
+                error_qs = urlencode({"error": str(exc)})
+                return HttpResponseRedirect(f"{reverse('workspace', kwargs={'project_id': project.id})}?{error_qs}")
 
         return HttpResponseRedirect(reverse("workspace", kwargs={"project_id": project.id}))
 
