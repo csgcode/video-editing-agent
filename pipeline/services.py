@@ -9,6 +9,8 @@ from pathlib import Path
 from django.conf import settings
 
 from pipeline.ai import CreativeBriefInput, get_provider
+from pipeline.planner import build_edit_plan, persist_edit_plan
+from pipeline.quality import validate_plan_quality
 from projects.models import Asset, Draft, DraftVersion, Overlay, Project
 
 
@@ -399,6 +401,22 @@ def rerender_draft(project: Project, draft: Draft, timeline: dict, source: str =
     normalized = Path(settings.MEDIA_ROOT) / "normalized" / f"{project.id}.mp4"
     if not normalized.exists():
         normalize_video(src_path, normalized)
+    metadata = ffprobe_metadata(normalized)
+    video_context = getattr(project, "video_context", None)
+    context_json = video_context.context_json if video_context else {}
+    plan_json = build_edit_plan(project, context_json, {}, timeline, source=source)
+    quality_report = validate_plan_quality(plan_json.get("overlays", []), metadata.get("duration_sec", 0.0))
+    if quality_report["critical"]:
+        persist_edit_plan(
+            project=project,
+            draft=draft,
+            plan_json=plan_json,
+            quality_report_json=quality_report,
+            source=source,
+            status="failed",
+            error="; ".join(quality_report["critical"]),
+        )
+        raise PipelineError(f"Quality gate failed: {'; '.join(quality_report['critical'])}")
 
     draft_path = Path(settings.MEDIA_ROOT) / "drafts" / f"{project.id}-{uuid.uuid4().hex[:6]}.mp4"
     render_with_overlays(normalized, draft_path, timeline, project)
@@ -410,4 +428,5 @@ def rerender_draft(project: Project, draft: Draft, timeline: dict, source: str =
     draft.error = ""
     draft.save(update_fields=["timeline_json", "draft_video", "status", "error", "updated_at"])
     rebuild_overlays(draft, timeline)
+    persist_edit_plan(project, draft, plan_json, quality_report, source=source)
     persist_draft_version(draft, timeline, source=source)
