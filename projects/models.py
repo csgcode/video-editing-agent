@@ -48,6 +48,19 @@ class Asset(TimestampedModel):
         indexes = [models.Index(fields=["project", "asset_type"])]
 
 
+class VideoContext(TimestampedModel):
+    class Status(models.TextChoices):
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.OneToOneField(Project, on_delete=models.CASCADE, related_name="video_context")
+    source_asset = models.ForeignKey(Asset, on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.READY)
+    context_json = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+
+
 class Draft(TimestampedModel):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

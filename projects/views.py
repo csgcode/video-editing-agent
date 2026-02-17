@@ -9,6 +9,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pipeline.context import save_video_context
 from pipeline.services import ffprobe_metadata, rerender_draft
 from pipeline.tasks import export_final_task, generate_draft_task
 from projects.models import Asset, Draft, ExportArtifact, Job, Overlay, Project
@@ -50,6 +51,7 @@ class ProjectAssetUploadView(APIView):
                 )
             asset.metadata = metadata
             asset.save(update_fields=["metadata", "updated_at"])
+            save_video_context(project, asset, metadata)
 
         return Response(AssetUploadSerializer(asset).data, status=status.HTTP_201_CREATED)
 

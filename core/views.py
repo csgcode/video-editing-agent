@@ -12,6 +12,7 @@ from django.views import View
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pipeline.context import save_video_context
 from pipeline.ai import edit_overlays_with_prompt
 from pipeline.services import PipelineError, ffprobe_metadata, rerender_draft
 from pipeline.tasks import export_final_task, generate_draft_task
@@ -37,6 +38,7 @@ class WorkspaceView(View):
     def get(self, request, project_id):
         project = get_object_or_404(Project, id=project_id)
         draft = Draft.objects.filter(project=project).first()
+        video_context = getattr(project, "video_context", None)
         jobs = Job.objects.filter(project=project).order_by("-created_at")[:10]
         exports = ExportArtifact.objects.filter(project=project).order_by("-created_at")[:10]
         overlay_json = "[]"
@@ -51,6 +53,7 @@ class WorkspaceView(View):
                 "jobs": jobs,
                 "exports": exports,
                 "assets": project.assets.order_by("-created_at"),
+                "video_context": video_context,
                 "max_duration": settings.VIDEO_MAX_DURATION_SECONDS,
                 "overlay_json": overlay_json,
                 "error_message": request.GET.get("error", ""),
@@ -71,6 +74,7 @@ class WorkspaceView(View):
                 else:
                     asset.metadata = metadata
                     asset.save(update_fields=["metadata", "updated_at"])
+                    save_video_context(project, asset, metadata)
 
         elif action == "upload_logo":
             upload = request.FILES.get("logo")

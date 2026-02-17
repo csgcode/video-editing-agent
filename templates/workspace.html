@@ -131,5 +131,15 @@
         {% endfor %}
       </ul>
     </div>
+
+    <div class="card">
+      <h3>Video Context</h3>
+      {% if video_context %}
+        <p>Status: {{ video_context.status }}</p>
+        <pre style="white-space: pre-wrap;">{{ video_context.context_json }}</pre>
+      {% else %}
+        <p>No context generated yet. Upload a source video first.</p>
+      {% endif %}
+    </div>
   </body>
 </html>
