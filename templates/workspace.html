@@ -141,5 +141,32 @@
         <p>No context generated yet. Upload a source video first.</p>
       {% endif %}
     </div>
+
+    <div class="card">
+      <h3>Agent Decisions</h3>
+      {% if latest_plan %}
+        <p><strong>Plan Version:</strong> {{ latest_plan.version }} ({{ latest_plan.source }})</p>
+        <p><strong>Status:</strong> {{ latest_plan.status }}</p>
+        {% if latest_plan.error %}<p><strong>Error:</strong> {{ latest_plan.error }}</p>{% endif %}
+        <p><strong>Reasoning:</strong> {{ latest_plan.plan_json.reasoning_summary }}</p>
+        <p><strong>Quality Critical:</strong> {{ latest_plan.quality_report_json.critical }}</p>
+        <p><strong>Quality Warnings:</strong> {{ latest_plan.quality_report_json.warnings }}</p>
+      {% else %}
+        <p>No plan artifact yet.</p>
+      {% endif %}
+      <h4>Draft Versions</h4>
+      <ul>
+        {% for v in versions %}
+        <li>
+          v{{ v.version }} ({{ v.source }}) -
+          +{{ v.overlay_diff_json.added|length }}
+          / ~{{ v.overlay_diff_json.updated|length }}
+          / -{{ v.overlay_diff_json.removed|length }}
+        </li>
+        {% empty %}
+        <li>No draft versions yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
   </body>
 </html>

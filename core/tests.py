@@ -22,3 +22,9 @@ class CoreUiTests(TestCase):
         )
         assert response.status_code == 302
         assert Project.objects.filter(name="UI Project").exists()
+
+    def test_workspace_shows_agent_decisions_panel(self):
+        project = Project.objects.create(name="Panel Project")
+        response = self.client.get(f"/app/projects/{project.id}")
+        assert response.status_code == 200
+        assert "Agent Decisions" in response.content.decode()

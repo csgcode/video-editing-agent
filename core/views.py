@@ -39,6 +39,8 @@ class WorkspaceView(View):
         project = get_object_or_404(Project, id=project_id)
         draft = Draft.objects.filter(project=project).first()
         video_context = getattr(project, "video_context", None)
+        latest_plan = project.edit_plans.first()
+        versions = draft.versions.all()[:10] if draft else []
         jobs = Job.objects.filter(project=project).order_by("-created_at")[:10]
         exports = ExportArtifact.objects.filter(project=project).order_by("-created_at")[:10]
         overlay_json = "[]"
@@ -54,6 +56,8 @@ class WorkspaceView(View):
                 "exports": exports,
                 "assets": project.assets.order_by("-created_at"),
                 "video_context": video_context,
+                "latest_plan": latest_plan,
+                "versions": versions,
                 "max_duration": settings.VIDEO_MAX_DURATION_SECONDS,
                 "overlay_json": overlay_json,
                 "error_message": request.GET.get("error", ""),
